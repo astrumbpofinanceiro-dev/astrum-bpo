@@ -1,0 +1,30 @@
+:root { --navy: #1f2f46; --navy-2: #2b3d56; --green: #7cac84; --green-dark: #3f6b48; --bg: #f4f6f8; --line: #dde3ea; --text: #1a2738; --muted: #5a6779; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--text); }
+header { display: flex; align-items: center; gap: 12px; padding: 10px 20px; background: var(--navy); color: #fff; border-bottom: 3px solid var(--green); flex-wrap: wrap; }
+header img { width: 44px; height: 44px; border-radius: 6px; }
+header h1 { font-size: 17px; margin: 0; flex: 1; }
+main { max-width: 1040px; margin: 0 auto; padding: 20px; }
+h1, h2, h3 { line-height: 1.25; }
+section { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; overflow-x: auto; }
+section h2 { margin: 0 0 10px; font-size: 16px; color: var(--navy-2); }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+button, input, select, textarea { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--text); }
+button { background: var(--navy-2); color: #fff; border-color: var(--navy-2); cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+form { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; margin: 8px 0; }
+label { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--muted); }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; background: #e9edf2; }
+.ok { background: #dcecdf; color: var(--green-dark); }
+.warn { background: #fbeccb; color: #75520a; }
+.bad { background: #f8dcda; color: #8d231c; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.card { border: 1px solid var(--line); border-left: 4px solid var(--green); border-radius: 6px; padding: 10px; }
+.card strong { display: block; font-size: 20px; }
+[role="alert"]:not(:empty) { background: #f8dcda; color: #8d231c; padding: 8px 12px; border-radius: 6px; }
+form:not(:has(*)) { display: none; }
+td input[type="file"] { max-width: 190px; }
+@media (max-width: 520px) { .rotina tr { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--line); } .rotina td { border: 0; } }
+body > main > form { background: #fff; padding: 16px; border-radius: 8px; }
