@@ -1,10 +1,27 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { supabaseBrowser } from "../_auth/browser-client";
 
 export default function Login() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("erro") === "link") setError("Este link expirou ou já foi usado. Peça um novo convite ou use \"Esqueci minha senha\".");
+    if (query.get("senha") === "ok") setNotice("Senha definida. Entre para continuar.");
+    // Links antigos ou em outro formato chegam com o código na URL: leva para definir a senha.
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    if (["invite", "recovery"].includes(hash.get("type") ?? "") && hash.get("access_token")) {
+      supabaseBrowser().auth.getSession().then(({ data }) => { if (data.session) window.location.assign("/definir-senha"); });
+    } else if (query.get("code")) {
+      supabaseBrowser().auth.exchangeCodeForSession(query.get("code")!).then(({ error: e }) => {
+        if (e) setError("Este link expirou ou já foi usado. Peça um novo convite ou use \"Esqueci minha senha\".");
+        else window.location.assign("/definir-senha");
+      });
+    }
+  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,6 +51,7 @@ export default function Login() {
         <label>Senha <input name="password" type="password" autoComplete="current-password" required /></label>
         <button disabled={busy}>{busy ? "Entrando…" : "Entrar"}</button>
       </form>
+      {notice && <p className="auth-ok" role="status">{notice}</p>}
       <p role="alert">{error}</p>
       <a href="/recuperar-senha">Esqueci minha senha</a>
       <aside className="auth-note">

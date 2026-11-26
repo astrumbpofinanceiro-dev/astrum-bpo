@@ -14,11 +14,13 @@ export default function RecuperarSenha() {
   return (
     <main className="auth">
       <img className="auth-logo" src="/astrum-logo.jpg" alt="Astrum BPO Financeiro" />
-      <h1>Recuperar senha</h1>
-      {sent ? <p>Se o e-mail estiver cadastrado, você receberá um link.</p> : (
+      <h1>Esqueci minha senha</h1>
+      {sent ? <><p>Se o e-mail estiver cadastrado, você receberá em instantes uma mensagem com o link para criar uma nova senha. Confira também a caixa de spam.</p><a href="/login">Voltar para o login</a></> : (
         <form onSubmit={submit}>
+          <p>Informe o e-mail da sua conta e enviaremos um link para criar uma nova senha.</p>
           <label>E-mail <input name="email" type="email" required /></label>
           <button>Enviar link</button>
+          <a href="/login">Voltar para o login</a>
         </form>
       )}
     </main>

@@ -140,3 +140,4 @@ main.auth p { margin: 0; }
   .cad-one .cad-item-main { flex: 1 1 calc(100% - 40px); }
   .cad-one .cad-amount { width: 100%; grid-auto-flow: column; justify-content: space-between; align-items: center; justify-items: start; text-align: left; }
 }
+.auth-ok { background: #dcecdf; color: var(--green-dark); padding: 8px 12px; border-radius: 10px; font-size: 14px; }
