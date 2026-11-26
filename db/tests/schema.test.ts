@@ -17,7 +17,7 @@ const DOC2: Record<string, string> = {
   payment_terminals: "id tenant_id acquirer_id business_unit_id terminal_code is_active",
   accounting_categories: "id tenant_id parent_id code name nature is_active",
   cost_centers: "id tenant_id name is_active",
-  tags: "id tenant_id name color",
+  tags: "id tenant_id name color is_active",
   documents: "id tenant_id business_unit_id uploaded_by_user_id origin_channel doc_category competence_date period_start period_end receipt_status processing_status review_status created_at",
   document_files: "id tenant_id document_id file_role storage_bucket storage_key original_filename mime_type file_size_bytes sha256_hash created_at",
   import_batches: "id tenant_id document_id source_type idempotency_key parser_version period_start period_end status total_items imported_items duplicate_items created_at",

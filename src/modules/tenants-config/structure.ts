@@ -136,3 +136,28 @@ export async function updateCostCenter(c: pg.PoolClient, tenantId: string, id: s
   if (!row) throw forbidden();
   return row;
 }
+
+export const tagInput = z.strictObject({ name: name.max(60), color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).nullable().default(null) });
+export const tagPatch = z.strictObject({
+  name: name.max(60).optional(), color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).nullable().optional(), isActive: z.boolean().optional(),
+});
+
+export async function listTags(c: pg.PoolClient, tenantId: string) {
+  return (await c.query("SELECT id, name, color, is_active FROM tags WHERE tenant_id = $1 ORDER BY name", [tenantId])).rows;
+}
+
+export async function createTag(c: pg.PoolClient, tenantId: string, raw: unknown) {
+  const i = tagInput.parse(raw);
+  return (await c.query("INSERT INTO tags (tenant_id, name, color) VALUES ($1,$2,$3) RETURNING id, name, color, is_active",
+    [tenantId, i.name, i.color])).rows[0];
+}
+
+export async function updateTag(c: pg.PoolClient, tenantId: string, id: string, raw: unknown) {
+  const i = tagPatch.parse(raw);
+  const row = (await c.query(
+    `UPDATE tags SET name = COALESCE($3, name), color = CASE WHEN $4 THEN $5 ELSE color END, is_active = COALESCE($6, is_active)
+      WHERE tenant_id = $1 AND id = $2 RETURNING id, name, color, is_active`,
+    [tenantId, id, i.name ?? null, i.color !== undefined, i.color ?? null, i.isActive ?? null])).rows[0];
+  if (!row) throw forbidden();
+  return row;
+}

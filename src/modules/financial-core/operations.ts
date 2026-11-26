@@ -16,6 +16,8 @@ export const operationInput = z.strictObject({
   counterpartyName: z.string().trim().max(180).optional(),
   categoryId: z.guid().optional(),
   costCenterId: z.guid().optional(),
+  /** Código do contrato/turma que agrupa várias operações. */
+  tagId: z.guid().optional(),
   sourceDocumentId: z.guid().optional(),
   acquirerId: z.guid().optional(),
   externalNsuTid: z.string().trim().min(1).max(100).optional(),
@@ -49,12 +51,12 @@ export async function createOperation(
   const op = (await c.query(
     `INSERT INTO economic_operations (tenant_id, business_unit_id, operation_type, origin_type, created_by_user_id,
         source_document_id, acquirer_id, external_nsu_tid, category_id, cost_center_id, operation_date,
-        competence_date, gross_amount, description)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
+        competence_date, gross_amount, description, tag_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
     [access.tenantId, input.businessUnitId ?? null, input.operationType, origin, access.userId,
      input.sourceDocumentId ?? null, input.acquirerId ?? null, input.externalNsuTid ?? null, input.categoryId ?? null,
      input.costCenterId ?? null, input.operationDate, input.competenceDate ?? input.operationDate,
-     input.grossAmount, input.description])).rows[0].id as string;
+     input.grossAmount, input.description, input.tagId ?? null])).rows[0].id as string;
   const direction = ["SALE", "SERVICE"].includes(input.operationType) ? "RECEIVABLE" : "PAYABLE";
   const obligation = (await c.query(
     `INSERT INTO financial_obligations (tenant_id, economic_operation_id, direction, counterparty_name, total_amount, status)
@@ -89,7 +91,7 @@ export async function approveOperations(c: pg.PoolClient, access: Access, raw: u
 export async function getOperation(c: pg.PoolClient, access: Access, id: string) {
   const op = (await c.query(
     `SELECT id, operation_type, review_status, operation_date, competence_date, gross_amount, description,
-            acquirer_id, external_nsu_tid, reversal_of_operation_id
+            acquirer_id, external_nsu_tid, reversal_of_operation_id, tag_id
        FROM economic_operations WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`, [access.tenantId, id])).rows[0];
   if (!op) throw forbidden();
   const installments = (await c.query(

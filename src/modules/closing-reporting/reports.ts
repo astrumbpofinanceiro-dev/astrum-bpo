@@ -172,3 +172,31 @@ export async function fullReport(c: pg.PoolClient, tenantId: string, month: stri
     indicators: await indicators(c, tenantId, month, caveats),
   };
 }
+
+/**
+ * Resultado por etiqueta (contrato/turma), pela competência das operações aprovadas.
+ * Sem mês, acumula todas as competências. Taxas de cartão e juros não são rateados por etiqueta;
+ * por isso o total das etiquetas somado ao "sem etiqueta" fecha com receita e custos do relatório geral.
+ */
+export async function tagReport(c: pg.PoolClient, tenantId: string, month?: string) {
+  const [from, to] = month ? monthRange(month) : ["0001-01-01", "9999-12-31"];
+  const rows = (await c.query(
+    `SELECT t.id AS "tagId", t.name, t.color,
+            COUNT(o.id)::int AS operations,
+            COALESCE(SUM(o.gross_amount) FILTER (WHERE o.operation_type IN ('SALE','SERVICE')),0)::numeric(15,2) AS revenue,
+            COALESCE(SUM(o.gross_amount) FILTER (WHERE o.operation_type = 'REFUND_REVERSAL'),0)::numeric(15,2) AS deductions,
+            COALESCE(SUM(o.gross_amount) FILTER (WHERE o.operation_type IN ('PURCHASE','EXPENSE')),0)::numeric(15,2) AS costs
+       FROM tags t JOIN economic_operations o ON o.tenant_id = t.tenant_id AND o.tag_id = t.id
+        AND o.competence_date BETWEEN $2 AND $3 AND o.deleted_at IS NULL AND o.review_status IN ${APPROVED}
+      WHERE t.tenant_id = $1 GROUP BY t.id, t.name, t.color ORDER BY t.name`, [tenantId, from, to])).rows;
+  const withResult = rows.map((r) => ({ ...r, result: f(d(r.revenue).minus(r.deductions).minus(r.costs)) }));
+  const untagged = (await c.query(
+    `SELECT COUNT(*)::int AS operations,
+            COALESCE(SUM(gross_amount) FILTER (WHERE operation_type IN ('SALE','SERVICE')),0)::numeric(15,2) AS revenue,
+            COALESCE(SUM(gross_amount) FILTER (WHERE operation_type = 'REFUND_REVERSAL'),0)::numeric(15,2) AS deductions,
+            COALESCE(SUM(gross_amount) FILTER (WHERE operation_type IN ('PURCHASE','EXPENSE')),0)::numeric(15,2) AS costs
+       FROM economic_operations WHERE tenant_id = $1 AND tag_id IS NULL AND competence_date BETWEEN $2 AND $3
+        AND deleted_at IS NULL AND review_status IN ${APPROVED}`, [tenantId, from, to])).rows[0];
+  return { month: month ?? null, tags: withResult,
+    untagged: { ...untagged, result: f(d(untagged.revenue).minus(untagged.deductions).minus(untagged.costs)) } };
+}

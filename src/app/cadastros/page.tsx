@@ -1,11 +1,11 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { api, field, Shell, useAction, useApi } from "../_ui/shared";
+import { api, brl, field, Shell, useAction, useApi } from "../_ui/shared";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const TABS = [
   ["unidades", "Unidades"], ["contas", "Contas"], ["cartoes", "Cartões"],
-  ["adquirentes", "Adquirentes"], ["plano", "Plano de contas"], ["centros", "Centros de custo"],
+  ["adquirentes", "Adquirentes"], ["plano", "Plano de contas"], ["centros", "Centros de custo"], ["etiquetas", "Etiquetas"],
 ] as const;
 type Tab = (typeof TABS)[number][0];
 
@@ -76,6 +76,8 @@ export default function Cadastros() {
   const acquirers = useList(tenantId ? `${base}/acquirers` : null, version);
   const categories = useList(tenantId ? `${base}/categories` : null, version);
   const centers = useList(tenantId ? `${base}/cost-centers` : null, version);
+  const tags = useList(tenantId ? `${base}/tags` : null, version);
+  const tagReport = useApi<any>(tenantId ? `${base}/tag-report` : null, version);
   const noAccess = !!tenantId && units === null && accounts === null;
 
   const save = useCallback((work: () => Promise<unknown>, message: string) => {
@@ -111,6 +113,8 @@ export default function Cadastros() {
       nature: String(d.get("nature")), parentId: String(d.get("parent") || "") || null } }), "Categoria cadastrada."); };
   const centerForm = (e: FormEvent<HTMLFormElement>) => { const d = field(e);
     save(() => api(`${base}/cost-centers`, { body: { name: String(d.get("name")) } }), "Centro de custo cadastrado."); };
+  const tagForm = (e: FormEvent<HTMLFormElement>) => { const d = field(e);
+    save(() => api(`${base}/tags`, { body: { name: String(d.get("name")), color: String(d.get("color")) } }), "Etiqueta cadastrada."); };
   const tenantForm = (e: FormEvent<HTMLFormElement>) => { const d = field(e);
     run(async () => {
       const r = await api<{ id: string }>("/tenants", { body: { legalName: String(d.get("legal")), tradeName: String(d.get("trade")),
@@ -146,6 +150,7 @@ export default function Cadastros() {
     </form>
   );
 
+  const COLORS = ["#3F6B48", "#1F2F46", "#B7791F", "#B83A32", "#6B46C1", "#2B6CB0"];
   const forms: Record<Tab, { title: string; add: string; body: ReactNode }> = {
     unidades: { title: "Nova unidade", add: "Unidade", body: (
       <form className="cad-form" onSubmit={unitForm}>
@@ -172,6 +177,15 @@ export default function Cadastros() {
         <Field label="Dentro de (opcional)"><select name="parent" defaultValue=""><option value="">Nível principal</option>
           {tree.map(({ c, depth }) => <option key={c.id} value={c.id}>{"– ".repeat(depth)}{c.code} {c.name}</option>)}</select></Field>
         <p className="cad-hint">Depois de criados, código, natureza e posição não mudam: lançamentos antigos dependem deles. Só o nome e a situação.</p>
+        <Submit>Salvar</Submit>
+      </form>) },
+    etiquetas: { title: "Nova etiqueta", add: "Etiqueta", body: (
+      <form className="cad-form" onSubmit={tagForm}>
+        <Field label="Nome do contrato"><input name="name" required maxLength={60} autoFocus placeholder="Ex.: Medicina XXVII – Bruna" /></Field>
+        <fieldset className="cad-colors"><legend>Cor</legend>
+          {COLORS.map((c, i) => <label key={c} style={{ background: c }}><input type="radio" name="color" value={c} defaultChecked={i === 0} /><span /></label>)}
+        </fieldset>
+        <p className="cad-hint">Use o padrão turma + responsável. Todos os lançamentos do contrato recebem a mesma etiqueta, e o resultado soma o contrato inteiro.</p>
         <Submit>Salvar</Submit>
       </form>) },
     centros: { title: "Novo centro de custo", add: "Centro de custo", body: (
@@ -210,6 +224,18 @@ export default function Cadastros() {
         <Actions active={c.is_active} onClick={() => toggle(`${base}/categories/${c.id}`, c, c.is_active ? "Categoria desativada." : "Categoria reativada.")} />
       </li>)}</ul>
       : <Empty text="Nenhuma categoria ainda. Monte o plano de contas em níveis: Receitas, Custos, Despesas…" action={addButton} />),
+    etiquetas: gate(tags, (rows) => rows.length ? <ul className="cad-list">{rows.map((t) => {
+      const r = tagReport?.tags?.find((x: any) => x.tagId === t.id);
+      return (
+        <li key={t.id} className="cad-item">
+          <span className="cad-dot" style={{ background: t.color ?? "#9aa6b5" }} aria-hidden />
+          <div className="cad-item-main"><strong>{t.name}</strong>
+            <span>{r ? `${r.operations} lançamento(s) · receita ${brl(r.revenue)} · custos ${brl(r.costs)} · resultado ${brl(r.result)}` : "Sem lançamentos aprovados"}</span></div>
+          <Status active={t.is_active} />
+          <Actions active={t.is_active} onClick={() => toggle(`${base}/tags/${t.id}`, t, t.is_active ? "Etiqueta desativada." : "Etiqueta reativada.")} />
+        </li>);
+    })}</ul>
+      : <Empty text="Nenhuma etiqueta. Crie uma por contrato ou turma para acompanhar o resultado de cada um." action={addButton} />),
     centros: gate(centers, (rows) => rows.length ? <ul className="cad-list">{rows.map((c) =>
       <Item key={c.id} title={c.name} badge={<Status active={c.is_active} />}
         actions={<Actions active={c.is_active} onClick={() => toggle(`${base}/cost-centers/${c.id}`, c, c.is_active ? "Centro desativado." : "Centro reativado.")} />} />)}</ul>
