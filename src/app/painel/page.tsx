@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, type FormEvent } from "react";
-import { api, Badge, brl, day, field, Report, Shell, thisMonth, useAction, useApi } from "../_ui/shared";
+import { api, Badge, bpoNav, brl, day, field, Report, Shell, thisMonth, useAction, useApi } from "../_ui/shared";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const ACTION: Record<string, string> = {
@@ -177,7 +177,7 @@ export default function Painel() {
   }
 
   return (
-    <Shell title="Painel operacional do BPO" nav={[{ href: "/painel", label: "Painel", current: true }, { href: "/cadastros", label: "Cadastros" }]}>
+    <Shell title="Painel operacional do BPO" nav={bpoNav("painel")}>
       <form onSubmit={(e) => e.preventDefault()}>
         <label>Competência <input type="month" value={month} onChange={(e) => setMonth(e.target.value || thisMonth())} /></label>
       </form>

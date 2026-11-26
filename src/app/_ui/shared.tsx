@@ -128,3 +128,10 @@ export function Report({ data }: { data: any }) {
     </>
   );
 }
+
+/** Navegação da equipe BPO. */
+export const bpoNav = (current: "painel" | "lancamentos" | "cadastros") => [
+  { href: "/painel", label: "Painel", current: current === "painel" },
+  { href: "/lancamentos", label: "Lançamentos", current: current === "lancamentos" },
+  { href: "/cadastros", label: "Cadastros", current: current === "cadastros" },
+];

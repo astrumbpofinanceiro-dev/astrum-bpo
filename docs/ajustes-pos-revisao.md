@@ -21,3 +21,10 @@ Testes: 95 passando (`db/tests/cartao.test.ts`, `fila-fechamento.test.ts`, cená
 - O relatório usa a competência das operações aprovadas. Taxas de cartão e juros não são rateados por etiqueta; etiquetas + "sem etiqueta" fecham com a receita e os custos do relatório geral.
 - Limite atual: a etiqueta é escolhida na criação da operação (API). Ainda não há tela de lançamento nem edição da etiqueta de operação já criada. Contrato com valor total e previsto x realizado fica para depois.
 Testes: 104 passando.
+
+## Acessos, login e lançamentos (telas)
+- **Login:** tela renovada com orientação de primeiro acesso. O acesso continua **só por convite** (não há cadastro aberto); o convite chega por e-mail, a pessoa define a senha e ativa o autenticador.
+- **Cadastros → Acessos:** convidar usuários do cliente (Master do cliente só convida funcionário, com permissões e limite; Master BPO convida também Master do cliente) e convidar/remover equipe BPO por empresa. Ativar/desativar acesso. O Master do cliente chega pelo link "Acessos" do portal.
+- **/lancamentos (equipe BPO):** lista de lançamentos (operações e caixa), filtro "A aprovar", aprovação em lote (Revisor/Master), e novo lançamento (venda, serviço, compra, despesa) com parcelas mensais, categoria, centro de custo, etiqueta e unidade. A listagem de lançamentos passou a devolver tipo da operação, etiqueta e categoria.
+- Atenção operacional: o envio de convites depende do e-mail do Supabase Auth (o padrão tem limite baixo por hora); para uso real, configurar SMTP próprio.
+Testes: 105 passando.

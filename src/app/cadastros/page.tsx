@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { api, brl, field, Shell, useAction, useApi } from "../_ui/shared";
+import { api, bpoNav, brl, field, Shell, useAction, useApi } from "../_ui/shared";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const TABS = [
@@ -302,7 +302,7 @@ export default function Cadastros() {
   };
 
   return (
-    <Shell title="Cadastros" nav={[{ href: "/painel", label: "Painel" }, { href: "/cadastros", label: "Cadastros", current: true }]}>
+    <Shell title="Cadastros" nav={bpoNav("cadastros")}>
       <div className="cad">
         <div className="cad-top">
           <label className="cad-field cad-tenant"><span>Empresa</span>
