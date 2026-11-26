@@ -52,11 +52,15 @@ export async function uploadDocument(
     if (batch?.sourceType === "ACQUIRER_CSV_XLSX" && !input.acquirerId) throw invalid("ACQUIRER_REQUIRED");
     if (input.financialAccountId) {
       const account = (await c.query(
-        "SELECT business_unit_id FROM financial_accounts WHERE tenant_id = $1 AND id = $2",
+        "SELECT business_unit_id, account_type FROM financial_accounts WHERE tenant_id = $1 AND id = $2",
         [a.tenantId, input.financialAccountId])).rows[0];
       // A conta de outra unidade não pode ser usada para contornar o escopo.
       if (!account || (account.business_unit_id && input.businessUnitId && account.business_unit_id !== input.businessUnitId)) {
         throw invalid("INVALID_REFERENCE");
+      }
+      // Extrato bancário não entra em conta de cartão: a fatura é paga por débito conciliado N:1.
+      if (batch?.sourceType === "BANK_OFX_CSV" && account.account_type === "CORPORATE_CARD") {
+        throw invalid("CARD_ACCOUNT_BANK_STATEMENT");
       }
     }
     return { batch, role: a.roles[0]!, tenantId: a.tenantId };

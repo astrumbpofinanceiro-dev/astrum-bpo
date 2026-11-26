@@ -4,7 +4,7 @@ import { z } from "zod";
 import { conflict, forbidden, invalid } from "../../shared/errors";
 import type { Access } from "../identity-access/authorize";
 import { feeCompetence } from "../receivables/cards";
-import { date, dec, fixed, positive, reason, requireRow, tolerance } from "../financial-core/common";
+import { date, dec, fixed, positive, reason, requireRow, tolerance, total } from "../financial-core/common";
 
 export const reconciliationInput = z.strictObject({
   matchMethod: z.enum(["EXACT_RULE", "MANUAL_BPO"]).default("MANUAL_BPO"),
@@ -215,12 +215,26 @@ export async function suggestMatches(c: pg.PoolClient, access: Access) {
         dec(x.amount).minus(m.amount).abs().lessThanOrEqualTo(x.type === "SETTLEMENT_EVENT" ? limit : 0) &&
         days >= 0 && days <= 2;
     });
-    const status = candidates.length === 1 ? "SUGGESTED_MATCH" : "UNRECONCILED";
+    // Um repasse da adquirente pode vir como um crédito único para vários eventos (um por venda):
+    // soma os eventos pendentes da mesma conta e data e compara com o crédito.
+    const bundles = new Map<string, typeof targets>();
+    for (const x of targets) {
+      if (x.type !== "SETTLEMENT_EVENT") continue;
+      const days = businessDaysBetween(x.date, m.date);
+      if (x.direction !== m.direction || x.account !== m.financial_account_id || days < 0 || days > 2) continue;
+      const key = `${x.account}|${x.date}`;
+      bundles.set(key, [...(bundles.get(key) ?? []), x]);
+    }
+    const combinations = [...bundles.values()]
+      .filter((g) => g.length > 1 && total(g.map((x) => x.amount)).minus(m.amount).abs().lessThanOrEqualTo(limit))
+      .map((g) => ({ targets: g.map((x) => ({ targetType: x.type, targetId: x.id, amount: fixed(dec(x.amount)) })) }));
+    const options = candidates.length + combinations.length;
+    const status = options === 1 ? "SUGGESTED_MATCH" : "UNRECONCILED";
     await c.query("UPDATE bank_transactions SET reconciliation_status = $2 WHERE id = $1 AND reconciliation_status <> $2",
       [m.id, status]);
-    if (candidates.length) {
-      result.push({ movementId: m.id, ambiguous: candidates.length > 1,
-        candidates: candidates.map((x) => ({ targetType: x.type, targetId: x.id, amount: m.amount })) });
+    if (options) {
+      result.push({ movementId: m.id, ambiguous: options > 1,
+        candidates: candidates.map((x) => ({ targetType: x.type, targetId: x.id, amount: m.amount })), combinations });
     }
   }
   return result;

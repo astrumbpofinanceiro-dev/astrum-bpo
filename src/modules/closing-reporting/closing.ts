@@ -9,7 +9,7 @@ import { fullReport, monthRange } from "./reports";
 
 export const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 
-/** Os seis itens do checklist (Doc 3 §5.1). */
+/** Os seis itens do checklist (Doc 3 §5.1) mais a fila de processamento (decisão posterior à especificação). */
 export async function checklist(c: pg.PoolClient, tenantId: string, m: string) {
   const [from, to] = monthRange(m);
   const one = async (sql: string, values: unknown[] = [tenantId, from, to]) => (await c.query(sql, values)).rows;
@@ -25,6 +25,12 @@ export async function checklist(c: pg.PoolClient, tenantId: string, m: string) {
       WHERE b.tenant_id = $1 AND b.status IN ('OVERLAP_REVIEW','FAILED_IMPORT')
         AND (CASE WHEN b.period_start IS NOT NULL THEN b.period_start <= $3 AND b.period_end >= $2
              ELSE COALESCE(d.competence_date, (d.created_at AT TIME ZONE 'America/Sao_Paulo')::date) BETWEEN $2 AND $3 END)`);
+  // Arquivo ainda na fila (ou aguardando aplicação) entraria depois do fechamento e falharia com PERIOD_CLOSED.
+  // Sem período conhecido, o lote bloqueia todos os meses abertos.
+  const queued = await one(
+    `SELECT b.id FROM import_batches b JOIN documents d ON d.id = b.document_id
+      WHERE b.tenant_id = $1 AND b.status IN ('UPLOADED','VALIDATING','IMPORTING','READY_TO_IMPORT')
+        AND (b.period_start IS NULL OR (b.period_start <= $3 AND b.period_end >= $2))`);
   const entries = await one(
     `SELECT id FROM cash_transactions WHERE tenant_id = $1 AND transaction_date BETWEEN $2 AND $3 AND deleted_at IS NULL
         AND review_status IN ('SUBMITTED_PENDING_BPO','UNDER_BPO_REVIEW')
@@ -42,6 +48,8 @@ export async function checklist(c: pg.PoolClient, tenantId: string, m: string) {
     { code: "NO_BLOCKING", label: "Sem pendências bloqueantes", ok: !issues.some((i) => i.severity === "BLOCKING_OPERATIONAL"),
       detail: issues.filter((i) => i.severity === "BLOCKING_OPERATIONAL").map((i) => i.title).join(", ") },
     { code: "NO_STUCK_BATCHES", label: "Sem lotes parados", ok: batches.length === 0, detail: batches.length ? `${batches.length} lote(s)` : "" },
+    { code: "NO_QUEUED_BATCHES", label: "Sem arquivos na fila de processamento", ok: queued.length === 0,
+      detail: queued.length ? `${queued.length} arquivo(s) aguardando` : "" },
     { code: "ENTRIES_REVIEWED", label: "Lançamentos conferidos", ok: entries.length === 0, detail: entries.length ? `${entries.length} aguardando` : "" },
     { code: "RECONCILED", label: "Conciliação bancária dentro da tolerância", ok: !limit.lessThan(difference),
       detail: limit.lessThan(difference) ? `R$ ${difference} sem conciliar` : "" },
@@ -124,6 +132,8 @@ export async function publish(
   if (caveats) {
     if (failed.includes("INITIAL_BALANCES")) throw conflict("CHECKLIST_INITIAL_BALANCES");
     if (failed.includes("NO_CRITICAL")) throw conflict("CHECKLIST_NO_CRITICAL");
+    // Nem a ressalva resolve: o arquivo em fila falharia ao ser processado depois do fechamento.
+    if (failed.includes("NO_QUEUED_BATCHES")) throw conflict("CHECKLIST_NO_QUEUED_BATCHES");
     const open = list.blockingIssues.map((i) => i.id as string);
     // A ressalva precisa enumerar exatamente as pendências aceitas.
     if (open.length !== caveats.issueIds.length || !open.every((id) => caveats.issueIds.includes(id))) {

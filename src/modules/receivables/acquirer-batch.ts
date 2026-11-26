@@ -80,10 +80,11 @@ export async function applyAcquirerBatch(c: pg.PoolClient, access: Access, batch
 
   const lineOf = async ({ row }: Item) => ({
     installmentId: await installmentOf(row), grossAmount: row.gross!, mdrFee: row.mdr!,
-    anticipationFee: row.anticipationFee!, fixedFee: row.otherFees!,
+    anticipationFee: row.anticipationFee!, fixedFee: row.otherFees!, netAmount: row.net!,
   });
   for (const type of ["ANTICIPATION", "SETTLEMENT"]) {
-    for (const group of groups(type, (r) => r.settlementDate ?? "")) {
+    // Repasse: um evento por venda (data + NSU). Antecipação: uma por data, com um evento por venda dentro dela.
+    for (const group of groups(type, (r) => type === "SETTLEMENT" ? `${r.settlementDate ?? ""}|${r.nsu}` : r.settlementDate ?? "")) {
       await attempt(group, async () => {
         const when = group[0]!.row.settlementDate;
         if (!when) throw new AppError(400, "MISSING_SETTLEMENT_DATE");
@@ -91,7 +92,7 @@ export async function applyAcquirerBatch(c: pg.PoolClient, access: Access, batch
         const prepared = [];
         for (const item of group) prepared.push(await lineOf(item));
         const common = { financialAccountId: batch.settlement_account_id, acquirerId: batch.acquirer_id,
-          items: prepared, netAmount: fixed(total(group.map((g) => g.row.net!))) };
+          items: prepared };
         const result = type === "ANTICIPATION"
           ? await createAnticipation(c, access, { ...common, requestedAt: when, effectiveDate: when, sourceDocumentId: batch.document_id })
           : await createSettlement(c, access, { ...common, settlementDate: when });

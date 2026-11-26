@@ -12,6 +12,8 @@ const line = z.strictObject({
   mdrFee: amount.default("0.00"),
   anticipationFee: amount.default("0.00"),
   fixedFee: amount.default("0.00"),
+  /** Líquido informado pela adquirente para esta linha; permite um evento por venda. */
+  netAmount: amount.optional(),
 });
 type Line = z.output<typeof line>;
 
@@ -38,11 +40,12 @@ export const anticipationInput = z.strictObject({
 
 interface Installment {
   id: string; direction: string; acquirer_id: string | null; competence_date: string | null; open: string;
+  operation_id: string | null;
 }
 
 async function installment(c: pg.PoolClient, tenantId: string, id: string): Promise<Installment> {
   return requireRow<Installment>(c,
-    `SELECT i.id, o.direction, p.acquirer_id, p.competence_date,
+    `SELECT i.id, o.direction, p.acquirer_id, p.competence_date, p.id AS operation_id,
             (i.gross_amount - i.settled_amount - i.cancelled_amount)::numeric(15,2) AS open
        FROM obligation_installments i JOIN financial_obligations o ON o.id = i.obligation_id
        LEFT JOIN economic_operations p ON p.id = o.economic_operation_id
@@ -123,7 +126,9 @@ export async function createSettlement(c: pg.PoolClient, access: Access, raw: un
   noRepeat(input.items);
   if (input.items.some((i) => dec(i.anticipationFee).greaterThan(0))) throw invalid("USE_ANTICIPATION");
   return createEvent(c, access, { accountId: input.financialAccountId, acquirerId: input.acquirerId,
-    date: input.settlementDate, items: input.items, chargebacks: input.chargebacks, netAmount: input.netAmount });
+    date: input.settlementDate, items: input.items, chargebacks: input.chargebacks,
+    netAmount: input.netAmount ?? (input.items.every((i) => i.netAmount !== undefined)
+      ? fixed(total(input.items.map((i) => i.netAmount!)).minus(total(input.chargebacks.map((x) => x.amount)))) : undefined) });
 }
 
 /** Antecipação total ou parcial: a previsão original nunca é apagada. */
@@ -150,9 +155,22 @@ export async function createAnticipation(c: pg.PoolClient, access: Access, raw: 
        VALUES ($1,$2,$3,$4,$5,$6)`,
       [access.tenantId, id, i.id, item.grossAmount, item.anticipationFee, fixed(lineNet(item))]);
   }
-  const settlement = await createEvent(c, access, { accountId: input.financialAccountId, acquirerId: input.acquirerId,
-    date: input.effectiveDate, items: input.items, chargebacks: [], netAmount: input.netAmount, anticipationId: id });
-  return { id, settlementId: settlement.id, netAmount: settlement.netAmount };
+  // Com o líquido de cada linha, o repasse é dividido em um evento por venda (Doc 3 §7, cenário 6);
+  // sem ele, mantém-se um único evento com o líquido total informado.
+  const perSale = input.items.every((i) => i.netAmount !== undefined);
+  const buckets = new Map<string, Line[]>();
+  for (const item of input.items) {
+    const key = perSale ? ((await installment(c, access.tenantId, item.installmentId)).operation_id ?? item.installmentId) : "all";
+    buckets.set(key, [...(buckets.get(key) ?? []), item]);
+  }
+  const events = [];
+  for (const items of buckets.values()) {
+    events.push(await createEvent(c, access, { accountId: input.financialAccountId, acquirerId: input.acquirerId,
+      date: input.effectiveDate, items, chargebacks: [],
+      netAmount: perSale ? fixed(total(items.map((i) => i.netAmount!))) : input.netAmount, anticipationId: id }));
+  }
+  return { id, settlementId: events[0]!.id, settlementIds: events.map((e) => e.id),
+    netAmount: fixed(total(events.map((e) => e.netAmount))) };
 }
 
 export const reversalInput = z.strictObject({ reason });

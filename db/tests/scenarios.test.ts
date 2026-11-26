@@ -10,6 +10,8 @@ import * as approve from "../../src/app/api/tenants/[tenantId]/operations/approv
 import * as refunds from "../../src/app/api/tenants/[tenantId]/operations/[operationId]/refunds/route.ts";
 import * as settlements from "../../src/app/api/tenants/[tenantId]/settlements/route.ts";
 import * as anticipations from "../../src/app/api/tenants/[tenantId]/anticipations/route.ts";
+import * as anticipationReverse from "../../src/app/api/tenants/[tenantId]/anticipations/[anticipationId]/reverse/route.ts";
+import * as suggest from "../../src/app/api/tenants/[tenantId]/reconciliations/suggestions/route.ts";
 import * as reconciliations from "../../src/app/api/tenants/[tenantId]/reconciliations/route.ts";
 import * as transfers from "../../src/app/api/tenants/[tenantId]/transfers/route.ts";
 import * as batches from "../../src/app/api/tenants/[tenantId]/batches/[batchId]/route.ts";
@@ -172,20 +174,54 @@ describe("Documento 3 §7 — cenários obrigatórios", () => {
     expect((await report("2026-11")).competence.grossRevenue).toBe("1000.00");
   });
 
-  // Comportamento atual do lote importado, que difere da letra do cenário (decisão pendente).
-  it("6 — mesmas vendas em um lote único importado: 1 alocação para o repasse com 3 parcelas", async () => {
+  const importedThree = async (nets: [string, string, string] = ["300,00", "450,00", "250,00"]) => {
     const csv = ["external_nsu_tid;operation_date;installment_number;total_installments;gross_amount;mdr_fee_amount;anticipation_fee_amount;net_amount;expected_settlement_date;settlement_date;event_type",
-      ...[["1", "300,00"], ["2", "450,00"], ["3", "250,00"]].flatMap(([n, v]) => [
+      ...[["1", "300,00", nets[0]], ["2", "450,00", nets[1]], ["3", "250,00", nets[2]]].flatMap(([n, v, net]) => [
         `N${n};2026-11-25;1;1;${v};0;0;${v};2026-12-25;;SALE`,
-        `N${n};2026-11-25;1;1;${v};0;0;${v};;2026-11-28;SETTLEMENT`])].join("\n");
+        `N${n};2026-11-25;1;1;${v};0;0;${net};;2026-11-28;SETTLEMENT`])].join("\n");
     const upload = await app.upload(app.s.user, "lote.csv", csv, { docCategory: "ACQUIRER_REPORT", acquirerId: app.s.a.acquirer });
     await app.work();
-    expect(await post(apply.POST, {}, { batchId: upload.batchId! })).toMatchObject({ applied: 6, pending: 0 });
-    const [event] = await app.rows("SELECT id, net_amount FROM settlement_events");
+    return post(apply.POST, {}, { batchId: upload.batchId! });
+  };
+
+  it("6 — mesmas vendas em um lote único importado: um evento por venda, 1 repasse com 3 alocações", async () => {
+    expect(await importedThree()).toMatchObject({ applied: 6, pending: 0 });
+    expect((await app.rows("SELECT count(*)::int AS n FROM settlement_events"))[0].n).toBe(3);
     const [credit] = await app.statement([["2026-11-28", "1000.00", "C6L"]]);
-    await reconcile(to(credit!, "SETTLEMENT_EVENT", event.id, "1000.00"));
-    expect(await group()).toEqual([{ groups: 1, allocations: 1, total: "1000.00" }]);
+    // a sugestão automática soma os eventos da mesma conta e data
+    const suggestions = await app.ok(suggest.POST, app.s.user, { method: "POST" });
+    const mine = suggestions.find((x: { movementId: string }) => x.movementId === credit);
+    expect(mine.combinations).toHaveLength(1);
+    expect(mine.combinations[0].targets).toHaveLength(3);
+    const events = await app.rows("SELECT id, net_amount FROM settlement_events ORDER BY net_amount");
+    await reconcile(...events.map((e: { id: string; net_amount: string }) => to(credit!, "SETTLEMENT_EVENT", e.id, e.net_amount)));
+    expect(await group()).toEqual([{ groups: 1, allocations: 3, total: "1000.00" }]);
+    expect((await app.rows("SELECT reconciliation_status AS v FROM bank_transactions"))[0].v).toBe("RECONCILED");
     expect((await app.rows("SELECT count(*)::int AS n FROM settlement_allocations"))[0].n).toBe(3);
+  });
+
+  it("6 — antecipação importada: uma antecipação, um evento por venda, estorno desfaz todos", async () => {
+    const csv = ["external_nsu_tid;operation_date;installment_number;total_installments;gross_amount;mdr_fee_amount;anticipation_fee_amount;net_amount;expected_settlement_date;settlement_date;event_type",
+      ...[["1", "300,00", "5,00", "295,00"], ["2", "200,00", "4,00", "196,00"]].flatMap(([n, v, fee, net]) => [
+        `N${n};2026-11-25;1;1;${v};0;${fee};${net};2026-12-25;;SALE`,
+        `N${n};2026-11-25;1;1;${v};0;${fee};${net};;2026-11-28;ANTICIPATION`])].join("\n");
+    const upload = await app.upload(app.s.user, "ant.csv", csv, { docCategory: "ACQUIRER_REPORT", acquirerId: app.s.a.acquirer });
+    await app.work();
+    expect(await post(apply.POST, {}, { batchId: upload.batchId! })).toMatchObject({ applied: 4, pending: 0 });
+    expect((await app.rows("SELECT count(*)::int AS n FROM receivable_anticipations"))[0].n).toBe(1);
+    expect(await app.rows("SELECT net_amount FROM settlement_events WHERE anticipation_id IS NOT NULL ORDER BY net_amount"))
+      .toEqual([{ net_amount: "196.00" }, { net_amount: "295.00" }]);
+    const [a] = await app.rows("SELECT id FROM receivable_anticipations");
+    await app.ok(anticipationReverse.POST, app.s.reviewer, { params: { anticipationId: a.id }, body: { reason: WHY } });
+    expect(await app.rows("SELECT DISTINCT status FROM settlement_events")).toEqual([{ status: "REVERSED" }]);
+  });
+
+  it("6 — centavos de ajuste ficam no evento da própria venda", async () => {
+    expect(await importedThree(["300,00", "449,99", "250,00"])).toMatchObject({ applied: 6, pending: 0 });
+    const adjusted = await app.rows(
+      `SELECT e.net_amount, f.amount FROM settlement_fee_items f JOIN settlement_events e ON e.id = f.settlement_event_id
+        WHERE f.fee_type = 'ADJUSTMENT'`);
+    expect(adjusted).toEqual([{ net_amount: "449.99", amount: "0.01" }]);
   });
 
   it("7 — chargeback após liquidação", async () => {
