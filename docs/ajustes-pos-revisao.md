@@ -9,3 +9,8 @@ Decisões aprovadas pelo cliente após a revisão do código.
    - API manual: `items[].netAmount` (opcional) habilita a divisão por venda na antecipação; sem ele mantém-se um evento só.
 
 Testes: 95 passando (`db/tests/cartao.test.ts`, `fila-fechamento.test.ts`, cenário 6 em `scenarios.test.ts`).
+
+## Cadastros (API e tela)
+- Rotas novas: `GET/POST /categories`, `PATCH /categories/:id`, `GET/POST /cost-centers`, `PATCH /cost-centers/:id` (permissão `structure.view` / `structure.manage`; só o Master BPO altera; funcionário em Modo Cego não lista). Categoria: código, natureza e pai não mudam depois de criados; só nome e situação (ativo/inativo). Auditoria pelos gatilhos existentes (inclui a marca de suporte do Master).
+- Tela `/cadastros`: empresa, unidades, contas, cartões, adquirentes, plano de contas (em árvore) e centros de custo. Celular: abas roláveis, formulário em folha deslizante; computador: lista em duas colunas e formulário em janela. Sem rolagem lateral em 390, 820 e 1366 px.
+- Master BPO precisa abrir o acesso de suporte (60 min, com motivo) para a empresa; a tela oferece o formulário.

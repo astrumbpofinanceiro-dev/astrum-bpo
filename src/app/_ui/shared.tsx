@@ -51,6 +51,10 @@ const MESSAGES: Record<string, string> = {
   CAVEAT_ISSUE_AWAITING_VALIDATION: "Há pendência respondida: valide ou devolva antes de publicar com ressalva.",
   ARQUIVO_RECUSADO: "Arquivo recusado: formato inválido ou corrompido.",
   ALREADY_CLOSED: "A competência já está fechada.",
+  ALREADY_EXISTS: "Já existe um cadastro com esse código ou nome.",
+  INVALID_REFERENCE: "Referência inválida: confira a unidade, a conta ou a categoria escolhida.",
+  VALIDATION: "Confira os campos preenchidos.",
+  SUPPORT_SESSION_REQUIRED: "Abra um acesso de suporte para esta empresa.",
   CAVEAT_ISSUES_MISMATCH: "A ressalva precisa listar todas as pendências bloqueantes.",
 };
 
@@ -76,7 +80,7 @@ export const field = (e: FormEvent<HTMLFormElement>) => {
 };
 export const thisMonth = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()).slice(0, 7);
 
-export function Shell({ title, children }: { title: string; children: ReactNode }) {
+export function Shell({ title, children, nav }: { title: string; children: ReactNode; nav?: { href: string; label: string; current?: boolean }[] }) {
   async function signOut() {
     await supabaseBrowser().auth.signOut();
     window.location.assign("/login");
@@ -86,6 +90,8 @@ export function Shell({ title, children }: { title: string; children: ReactNode 
       <header>
         <img src="/astrum-logo.jpg" alt="Astrum BPO Financeiro" />
         <h1>{title}</h1>
+        {nav && <nav className="topnav" aria-label="Seções">{nav.map((n) =>
+          <a key={n.href} href={n.href} aria-current={n.current ? "page" : undefined}>{n.label}</a>)}</nav>}
         <button onClick={signOut}>Sair</button>
       </header>
       <main>{children}</main>

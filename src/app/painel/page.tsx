@@ -177,7 +177,7 @@ export default function Painel() {
   }
 
   return (
-    <Shell title="Painel operacional do BPO">
+    <Shell title="Painel operacional do BPO" nav={[{ href: "/painel", label: "Painel", current: true }, { href: "/cadastros", label: "Cadastros" }]}>
       <form onSubmit={(e) => e.preventDefault()}>
         <label>Competência <input type="month" value={month} onChange={(e) => setMonth(e.target.value || thisMonth())} /></label>
       </form>
