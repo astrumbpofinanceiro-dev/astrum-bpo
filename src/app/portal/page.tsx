@@ -82,7 +82,7 @@ export default function Portal() {
 
   const mine = issues?.filter((i) => !["RESOLVED", "ACCEPTED_WITH_CAVEAT"].includes(i.status));
   return (
-    <Shell title="Portal do cliente">
+    <Shell title="Portal do cliente" nav={[{ href: "/portal", label: "Portal", current: true }, { href: "/cadastros", label: "Acessos" }]}>
       <form onSubmit={(e) => e.preventDefault()}>
         {tenants && tenants.length > 1 && (
           <label>Empresa

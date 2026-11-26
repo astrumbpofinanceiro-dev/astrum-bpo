@@ -26,15 +26,21 @@ export default function Login() {
   }
 
   return (
-    <main>
+    <main className="auth">
+      <img className="auth-logo" src="/astrum-logo.jpg" alt="Astrum BPO Financeiro" />
       <h1>Entrar</h1>
       <form onSubmit={submit}>
         <label>E-mail <input name="email" type="email" autoComplete="username" required /></label>
         <label>Senha <input name="password" type="password" autoComplete="current-password" required /></label>
-        <button disabled={busy}>Entrar</button>
+        <button disabled={busy}>{busy ? "Entrando…" : "Entrar"}</button>
       </form>
       <p role="alert">{error}</p>
       <a href="/recuperar-senha">Esqueci minha senha</a>
+      <aside className="auth-note">
+        <strong>Primeiro acesso?</strong>
+        <p>O acesso é só por convite. Abra o e-mail de convite que você recebeu, defina sua senha e ative o aplicativo autenticador.</p>
+        <p>Ainda não recebeu? Peça ao responsável pela sua empresa ou ao seu BPO Astrum para enviar um convite.</p>
+      </aside>
     </main>
   );
 }

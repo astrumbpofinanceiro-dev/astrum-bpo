@@ -25,7 +25,8 @@ export default function DefinirSenha() {
   }
 
   return (
-    <main>
+    <main className="auth">
+      <img className="auth-logo" src="/astrum-logo.jpg" alt="Astrum BPO Financeiro" />
       <h1>Definir senha</h1>
       <form onSubmit={submit}>
         <label>Nova senha <input name="password" type="password" autoComplete="new-password" minLength={12} required /></label>

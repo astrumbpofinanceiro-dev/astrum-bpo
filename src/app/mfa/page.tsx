@@ -35,7 +35,8 @@ export default function Mfa() {
   }
 
   return (
-    <main>
+    <main className="auth">
+      <img className="auth-logo" src="/astrum-logo.jpg" alt="Astrum BPO Financeiro" />
       <h1>Verificação em duas etapas</h1>
       {qr && (
         <section>

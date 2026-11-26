@@ -100,3 +100,22 @@ body > main > form { background: #fff; padding: 16px; border-radius: 8px; }
 .cad-colors span { position: absolute; inset: -4px; border-radius: 50%; border: 3px solid transparent; pointer-events: none; }
 .cad-colors input:checked + span { border-color: var(--navy); }
 .cad-colors input:focus-visible + span { border-color: var(--green); }
+
+/* ---- telas de acesso ---- */
+main.auth { max-width: 400px; margin: 6vh auto; padding: 28px 24px; background: #fff; border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 8px 30px rgba(31,47,70,.08); display: grid; gap: 12px; }
+main.auth h1 { margin: 0; font-size: 22px; color: var(--navy); }
+main.auth form { display: grid; gap: 12px; margin: 0; padding: 0; background: none; }
+main.auth label { font-size: 13px; }
+main.auth input, main.auth button { min-height: 46px; font-size: 16px; border-radius: 10px; width: 100%; }
+main.auth button { background: var(--green-dark); border-color: var(--green-dark); font-weight: 600; }
+main.auth a { color: var(--navy-2); font-size: 14px; }
+main.auth p { margin: 0; }
+.auth-logo { width: 64px; height: 64px; border-radius: 12px; background: var(--navy); }
+.auth-note { background: #f1f5f2; border-radius: 12px; padding: 12px 14px; font-size: 13px; color: var(--muted); display: grid; gap: 6px; }
+.auth-note strong { color: var(--navy); font-size: 14px; }
+@media (max-width: 480px) { main.auth { margin: 0; min-height: 100dvh; border-radius: 0; border: 0; box-shadow: none; align-content: start; padding-top: 8vh; } }
+.cad-checks { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin: 0; display: grid; gap: 4px; }
+.cad-checks legend { font-size: 13px; color: var(--muted); padding: 0 6px; }
+.cad-checks label { flex-direction: row; align-items: center; gap: 10px; font-size: 15px; color: var(--text); min-height: 40px; }
+.cad-checks input { width: 22px; min-height: 22px !important; height: 22px; }
+.cad-sub { margin-top: 20px; }

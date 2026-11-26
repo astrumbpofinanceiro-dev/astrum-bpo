@@ -5,7 +5,7 @@ import { api, brl, field, Shell, useAction, useApi } from "../_ui/shared";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const TABS = [
   ["unidades", "Unidades"], ["contas", "Contas"], ["cartoes", "Cartões"],
-  ["adquirentes", "Adquirentes"], ["plano", "Plano de contas"], ["centros", "Centros de custo"], ["etiquetas", "Etiquetas"],
+  ["adquirentes", "Adquirentes"], ["plano", "Plano de contas"], ["centros", "Centros de custo"], ["etiquetas", "Etiquetas"], ["acessos", "Acessos"],
 ] as const;
 type Tab = (typeof TABS)[number][0];
 
@@ -62,7 +62,7 @@ export default function Cadastros() {
   const tenants = useApi<any[]>("/tenants");
   const [tenantId, setTenantId] = useState("");
   const [tab, setTab] = useState<Tab>("unidades");
-  const [sheet, setSheet] = useState<null | "tenant" | "form">(null);
+  const [sheet, setSheet] = useState<null | "tenant" | "form" | "staff">(null);
   const { error, version, run } = useAction();
   const [done, setDone] = useState("");
 
@@ -78,6 +78,8 @@ export default function Cadastros() {
   const centers = useList(tenantId ? `${base}/cost-centers` : null, version);
   const tags = useList(tenantId ? `${base}/tags` : null, version);
   const tagReport = useApi<any>(tenantId ? `${base}/tag-report` : null, version);
+  const users = useList(tenantId ? `${base}/users` : null, version);
+  const staff = useList(isMaster && tenantId ? `${base}/staff` : null, version);
   const noAccess = !!tenantId && units === null && accounts === null;
 
   const save = useCallback((work: () => Promise<unknown>, message: string) => {
@@ -115,6 +117,22 @@ export default function Cadastros() {
     save(() => api(`${base}/cost-centers`, { body: { name: String(d.get("name")) } }), "Centro de custo cadastrado."); };
   const tagForm = (e: FormEvent<HTMLFormElement>) => { const d = field(e);
     save(() => api(`${base}/tags`, { body: { name: String(d.get("name")), color: String(d.get("color")) } }), "Etiqueta cadastrada."); };
+  const userForm = (e: FormEvent<HTMLFormElement>) => { const d = field(e);
+    const employee = (d.get("role") ?? "CLIENT_EMPLOYEE") === "CLIENT_EMPLOYEE";
+    save(() => api(`${base}/users`, { body: {
+      email: String(d.get("email")).trim(), fullName: String(d.get("name")), clientRole: employee ? "CLIENT_EMPLOYEE" : "CLIENT_MASTER",
+      ...(employee && { isBlindMode: d.get("blind") === "on", scopes: [{
+        businessUnitId: String(d.get("unit") || "") || null,
+        canUploadDocuments: d.get("upload") === "on", canCreateManualEntries: d.get("entries") === "on",
+        allowedEntryTypes: d.get("entries") === "on" ? ["SALE", "SERVICE", "PURCHASE", "EXPENSE"] : [],
+        maxEntryAmount: d.get("entries") === "on" && String(d.get("max") || "") ? String(d.get("max")).replace(",", ".") : null,
+        canViewReports: d.get("reports") === "on", canViewBankBalances: d.get("balances") === "on" }] }) } }),
+      "Convite enviado por e-mail."); };
+  const staffForm = (e: FormEvent<HTMLFormElement>) => { const d = field(e);
+    save(async () => {
+      const created = await api<{ userId: string }>("/staff-users", { body: { email: String(d.get("email")).trim(), fullName: String(d.get("name")) } });
+      await api(`${base}/staff`, { body: { userId: created.userId, bpoRole: String(d.get("bpoRole")) } });
+    }, "Convite enviado à equipe."); };
   const tenantForm = (e: FormEvent<HTMLFormElement>) => { const d = field(e);
     run(async () => {
       const r = await api<{ id: string }>("/tenants", { body: { legalName: String(d.get("legal")), tradeName: String(d.get("trade")),
@@ -150,6 +168,8 @@ export default function Cadastros() {
     </form>
   );
 
+  const BPO_ROLE: Record<string, string> = { BPO_ANALYST: "Analista", BPO_REVIEWER: "Revisor", BPO_AUDITOR: "Auditor" };
+  const CLIENT_ROLE: Record<string, string> = { CLIENT_MASTER: "Master do cliente", CLIENT_EMPLOYEE: "Funcionário" };
   const COLORS = ["#3F6B48", "#1F2F46", "#B7791F", "#B83A32", "#6B46C1", "#2B6CB0"];
   const forms: Record<Tab, { title: string; add: string; body: ReactNode }> = {
     unidades: { title: "Nova unidade", add: "Unidade", body: (
@@ -188,6 +208,24 @@ export default function Cadastros() {
         <p className="cad-hint">Use o padrão turma + responsável. Todos os lançamentos do contrato recebem a mesma etiqueta, e o resultado soma o contrato inteiro.</p>
         <Submit>Salvar</Submit>
       </form>) },
+    acessos: { title: "Convidar usuário", add: "Usuário", body: (
+      <form className="cad-form" onSubmit={userForm}>
+        <Field label="Nome completo"><input name="name" required maxLength={150} autoFocus /></Field>
+        <Field label="E-mail"><input name="email" type="email" required autoComplete="off" /></Field>
+        {isMaster && <Field label="Perfil"><select name="role" defaultValue="CLIENT_EMPLOYEE">
+          <option value="CLIENT_EMPLOYEE">Funcionário</option><option value="CLIENT_MASTER">Master do cliente</option></select></Field>}
+        {unitSelect}
+        <fieldset className="cad-checks"><legend>Permissões do funcionário</legend>
+          <label><input type="checkbox" name="upload" defaultChecked /> Enviar documentos</label>
+          <label><input type="checkbox" name="entries" /> Fazer lançamentos manuais</label>
+          <label><input type="checkbox" name="reports" /> Ver relatórios</label>
+          <label><input type="checkbox" name="balances" /> Ver saldos bancários</label>
+          <label><input type="checkbox" name="blind" defaultChecked /> Modo cego (não vê valores do negócio)</label>
+        </fieldset>
+        <Field label="Limite por lançamento, R$ (opcional)"><input name="max" inputMode="decimal" placeholder="Sem limite" /></Field>
+        <p className="cad-hint">A pessoa recebe um e-mail de convite, define a senha e ativa o autenticador. Master do cliente não precisa de permissões marcadas.</p>
+        <Submit>Enviar convite</Submit>
+      </form>) },
     centros: { title: "Novo centro de custo", add: "Centro de custo", body: (
       <form className="cad-form" onSubmit={centerForm}>
         <Field label="Nome"><input name="name" required maxLength={100} autoFocus placeholder="Ex.: Cozinha" /></Field><Submit>Salvar</Submit>
@@ -202,7 +240,9 @@ export default function Cadastros() {
   const Actions = ({ onClick, active }: { onClick: () => void; active: boolean }) =>
     isMaster ? <button className="cad-ghost" onClick={onClick}>{active ? "Desativar" : "Reativar"}</button> : null;
   const Status = ({ active }: { active: boolean }) => <span className={`badge ${active ? "ok" : ""}`}>{active ? "Ativo" : "Inativo"}</span>;
-  const addButton = isMaster ? <Add label={forms[tab].add} /> : null;
+  const canInvite = isMaster || !!me?.memberships?.some((m: any) => m.tenantId === tenantId && m.role === "CLIENT_MASTER");
+  const canAdd = tab === "acessos" ? canInvite : isMaster;
+  const addButton = canAdd ? <Add label={forms[tab].add} /> : null;
 
   const panels: Record<Tab, ReactNode> = {
     unidades: gate(units, (rows) => rows.length ? <ul className="cad-list">{rows.map((u) =>
@@ -236,6 +276,25 @@ export default function Cadastros() {
         </li>);
     })}</ul>
       : <Empty text="Nenhuma etiqueta. Crie uma por contrato ou turma para acompanhar o resultado de cada um." action={addButton} />),
+    acessos: gate(users, (rows) => (
+      <>
+        {rows.length ? <ul className="cad-list">{rows.map((u) =>
+          <Item key={u.membership_id} title={u.full_name} meta={`${u.email} · ${CLIENT_ROLE[u.client_role]}${u.client_role === "CLIENT_EMPLOYEE" && u.is_blind_mode ? " · modo cego" : ""}`}
+            badge={<Status active={u.is_active} />}
+            actions={(isMaster || u.client_role === "CLIENT_EMPLOYEE") ? <button className="cad-ghost" onClick={() =>
+              run(async () => { await api(`${base}/users/${u.membership_id}`, { method: "PATCH", body: { isActive: !u.is_active } }); setDone(u.is_active ? "Acesso desativado." : "Acesso reativado."); })}>
+              {u.is_active ? "Desativar" : "Reativar"}</button> : null} />)}</ul>
+          : <Empty text="Nenhum usuário do cliente ainda. Convide quem vai enviar documentos ou acompanhar a empresa." action={addButton} />}
+        {isMaster && (
+          <>
+            <div className="cad-panel-head cad-sub"><h2>Equipe BPO desta empresa</h2><button className="cad-secondary" onClick={() => setSheet("staff")}>+ Convidar</button></div>
+            {gate(staff, (list) => list.filter((x) => !x.revoked_at).length ? <ul className="cad-list">{list.filter((x) => !x.revoked_at).map((x) =>
+              <Item key={x.assignment_id} title={x.full_name} meta={`${x.email} · ${BPO_ROLE[x.bpo_role]}`}
+                actions={<button className="cad-ghost" onClick={() => run(async () => { await api(`${base}/staff/${x.assignment_id}`, { method: "DELETE" }); setDone("Acesso da equipe removido."); })}>Remover</button>} />)}</ul>
+              : <Empty text="Nenhum membro da equipe atribuído." />)}
+          </>
+        )}
+      </>)),
     centros: gate(centers, (rows) => rows.length ? <ul className="cad-list">{rows.map((c) =>
       <Item key={c.id} title={c.name} badge={<Status active={c.is_active} />}
         actions={<Actions active={c.is_active} onClick={() => toggle(`${base}/cost-centers/${c.id}`, c, c.is_active ? "Centro desativado." : "Centro reativado.")} />} />)}</ul>
@@ -282,15 +341,26 @@ export default function Cadastros() {
               ))}
             </nav>
             <section className="cad-panel">
-              <div className="cad-panel-head"><h2>{TABS.find(([id]) => id === tab)![1]}</h2>{isMaster && <Add label={forms[tab].add} />}</div>
+              <div className="cad-panel-head"><h2>{TABS.find(([id]) => id === tab)![1]}</h2>{canAdd && <Add label={forms[tab].add} />}</div>
               {panels[tab]}
-              {!isMaster && <p className="cad-hint">Somente o Master BPO altera a estrutura.</p>}
+              {!canAdd && <p className="cad-hint">{tab === "acessos" ? "Somente o Master do cliente e o Master BPO convidam usuários." : "Somente o Master BPO altera a estrutura."}</p>}
             </section>
           </>
         )}
       </div>
 
       {sheet === "form" && <Sheet title={forms[tab].title} onClose={() => setSheet(null)}>{forms[tab].body}</Sheet>}
+      {sheet === "staff" && (
+        <Sheet title="Convidar equipe BPO" onClose={() => setSheet(null)}>
+          <form className="cad-form" onSubmit={staffForm}>
+            <Field label="Nome completo"><input name="name" required maxLength={150} autoFocus /></Field>
+            <Field label="E-mail"><input name="email" type="email" required autoComplete="off" /></Field>
+            <Field label="Função nesta empresa"><select name="bpoRole" defaultValue="BPO_ANALYST">
+              {Object.entries(BPO_ROLE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field>
+            <Submit>Enviar convite</Submit>
+          </form>
+        </Sheet>
+      )}
       {sheet === "tenant" && (
         <Sheet title="Nova empresa" onClose={() => setSheet(null)}>
           <form className="cad-form" onSubmit={tenantForm}>
